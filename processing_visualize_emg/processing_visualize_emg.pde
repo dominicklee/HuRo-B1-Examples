@@ -8,10 +8,13 @@ ArrayList<Integer> dataPoints = new ArrayList<Integer>();
 String portName = "";
 int maxVal = 100;
 boolean isFrozen = false;
-int zoomLevel = 3;  // Every 3rd point will be connected
+int counter = 0;  // Counter for incoming data points (don't touch)
+float compressionRate = 0.6; // Compression rate, can be changed dynamically
+
 
 void setup() {
   size(800, 600);
+  surface.setTitle("HuRo-B1 | EMG Visualizer");
   cp5 = new ControlP5(this);
 
   PFont p = createFont("Arial", 16); // New font size
@@ -71,11 +74,12 @@ void draw() {
   
   strokeWeight(2);  // Make the green line thicker
   stroke(0, 255, 0); // Green color for the waveform
-
+/*
   // Draw previous data points
   for (int i = 1; i < dataPoints.size(); i++) {
     line(i-1, height - dataPoints.get(i-1), i, height - dataPoints.get(i));
   }
+  */
 
   if (myPort != null && isFrozen != true) {  // If we are connected to Serial
     while (myPort.available() > 0) {
@@ -91,15 +95,30 @@ void draw() {
         
         // Add the latest scaled data point
         int scaledVal = (int)map(sensorVal, 0, maxVal, 5, 530);  // 5 and 530 is height with margins
-        dataPoints.add(scaledVal);  // add point to the graph
+        
+        counter++;  // Increment counter for each new data point
+        // Add data point to array only if the counter is a multiple of 1/compressionRate
+        if (counter % (int)(1 / compressionRate) == 0) {
+          dataPoints.add(scaledVal);
+        }
+        //dataPoints.add(scaledVal);  // add point to the graph
 
         // Remove the oldest data point to keep a constant number of points
-        if (dataPoints.size() > width) {
+        float maxPointsInWindow = 1.0 / compressionRate;
+        if (dataPoints.size() > width * maxPointsInWindow) {
           dataPoints.remove(0);
         }
       }
     }
   }
+  
+// Draw previous data points, accounting for compression
+for (int i = 1; i < dataPoints.size(); i++) {
+  float x1 = (i - 1) * compressionRate;
+  float x2 = i * compressionRate;
+  line(x1, height - dataPoints.get(i-1), x2, height - dataPoints.get(i));
+}
+
 }
 
 void controlEvent(ControlEvent theEvent) {
