@@ -3,6 +3,7 @@
 int fsrPin = 35;  //force sensor pin
 
 void setup() {
+  pinMode(fsrPin, INPUT);
   Serial.begin(115200);
   delay(1000);
 }
