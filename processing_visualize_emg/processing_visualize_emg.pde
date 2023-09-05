@@ -4,12 +4,20 @@ import processing.serial.*;
 Serial myPort;
 ControlP5 cp5;
 Textlabel statusLabel;  // Declare status label
+Textlabel voltsLabel;  // Declare status label
 ArrayList<Integer> dataPoints = new ArrayList<Integer>();
 String portName = "";
 int maxVal = 100;
 boolean isFrozen = false;
 int counter = 0;  // Counter for incoming data points (don't touch)
-float compressionRate = 0.6; // Compression rate, can be changed dynamically
+float compressionRate = 0.9; // Compression rate, can be changed dynamically
+
+int numSamples = 200;  // Collect number of samples for averaging
+int voltRefreshPeriod = 150;  // Time in milliseconds for calculating and displaying avg
+int curSample = 0;  // (don't touch)
+long lastDisplayed = 0; // (don't touch)
+float [] voltReadings = new float[numSamples];  // Array to collect voltage readings
+
 
 
 void setup() {
@@ -54,6 +62,11 @@ void setup() {
   statusLabel = cp5.addLabel("Status: Idle")
                    .setPosition(15, height - 30)
                    .setFont(p);
+                   
+  // Add volts label
+  voltsLabel = cp5.addLabel("Volts: N/A")
+                   .setPosition(width - 85, height - 30)
+                   .setFont(p);
 }
 
 void draw() {
@@ -74,12 +87,6 @@ void draw() {
   
   strokeWeight(2);  // Make the green line thicker
   stroke(0, 255, 0); // Green color for the waveform
-/*
-  // Draw previous data points
-  for (int i = 1; i < dataPoints.size(); i++) {
-    line(i-1, height - dataPoints.get(i-1), i, height - dataPoints.get(i));
-  }
-  */
 
   if (myPort != null && isFrozen != true) {  // If we are connected to Serial
     while (myPort.available() > 0) {
@@ -93,15 +100,27 @@ void draw() {
           maxVal = sensorVal;  //update maxVal 
         }
         
+        // Calculate and log the voltage
+        float volts = map(sensorVal, 0, 4096, 0, 3.3);  // convert 12-bit value to volts
+        logSample(volts);  // stores the reading into array
+        
+        // Show avg voltage (every X period)
+        if (millis() - lastDisplayed > voltRefreshPeriod) {
+          float avgVolts = getAvgVoltage();
+          String voltsString = String.format(java.util.Locale.US,"%.2f", avgVolts);  // round to 2 decimal
+          showVoltage(voltsString);
+          
+          lastDisplayed = millis();  // update our flag
+        }
+        
         // Add the latest scaled data point
         int scaledVal = (int)map(sensorVal, 0, maxVal, 5, 530);  // 5 and 530 is height with margins
         
         counter++;  // Increment counter for each new data point
         // Add data point to array only if the counter is a multiple of 1/compressionRate
         if (counter % (int)(1 / compressionRate) == 0) {
-          dataPoints.add(scaledVal);
+          dataPoints.add(scaledVal);  // add point to the graph
         }
-        //dataPoints.add(scaledVal);  // add point to the graph
 
         // Remove the oldest data point to keep a constant number of points
         float maxPointsInWindow = 1.0 / compressionRate;
@@ -159,4 +178,31 @@ void Freeze() {
 
 void updateStatus(String alert) {
   statusLabel.setText("Status: " + alert);
+}
+
+void showVoltage(String volts) {
+  voltsLabel.setText("Volts: " + volts);
+}
+
+void logSample(float volts) {
+  // If curSample hasn't reached numSamples, add the new voltage to the array and increment curSample.
+  if (curSample < numSamples) {
+    voltReadings[curSample] = volts;
+    curSample++;
+  } else {
+    // Shift all elements to the left by 1, effectively removing the oldest
+    for (int i = 1; i < numSamples; i++) {
+      voltReadings[i - 1] = voltReadings[i];
+    }
+    // Add the new voltage reading at the end of the array
+    voltReadings[numSamples - 1] = volts;
+  }
+}
+
+float getAvgVoltage() {
+  float sum = 0;  // variable to store the cumulative total
+  for (int i = 0; i < curSample; i++) {  // iterate the array
+    sum += voltReadings[i];  // add each value from array
+  }
+  return sum/curSample;  // divide sum by n items
 }
