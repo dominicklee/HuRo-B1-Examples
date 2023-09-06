@@ -9,6 +9,9 @@ ArrayList<Integer> dataPoints = new ArrayList<Integer>();
 String portName = "";
 int maxVal = 100;
 boolean isFrozen = false;
+boolean isRecording = false;
+String recordFilename = "";  // Filename for recording (don't touch)
+PrintWriter writer;
 int counter = 0;  // Counter for incoming data points (don't touch)
 float compressionRate = 0.9; // Compression rate, can be changed dynamically
 
@@ -56,7 +59,11 @@ void setup() {
      
   cp5.addButton("Freeze")
      .setPosition(535, 20)
-     .setSize(140, 40);
+     .setSize(100, 40);
+     
+  cp5.addButton("Record")
+     .setPosition(645, 20)
+     .setSize(100, 40);
 
   // Add status label
   statusLabel = cp5.addLabel("Status: Idle")
@@ -103,6 +110,10 @@ void draw() {
         // Calculate and log the voltage
         float volts = map(sensorVal, 0, 4096, 0, 3.3);  // convert 12-bit value to volts
         logSample(volts);  // stores the reading into array
+        
+        if (isRecording) {
+          handleRecording(volts);
+        }
         
         // Show avg voltage (every X period)
         if (millis() - lastDisplayed > voltRefreshPeriod) {
@@ -173,6 +184,43 @@ void Freeze() {
   } else {
     isFrozen = true;
     updateStatus("Freeze Enabled");
+  }
+}
+
+void Record() {
+  if (myPort == null || isFrozen) { 
+    updateStatus("Failed to record. Check serial or unfreeze data.");
+    return;
+  }
+  isRecording = !isRecording; // Toggle the isRecording flag
+  
+  if (isRecording) {  // Update button label based on the new state
+    cp5.getController("Record").setLabel("Stop");
+    updateStatus("Recording now...");
+    
+    // Format the date and time to create the filename
+    String dateTimeString = new java.text.SimpleDateFormat("MMddYYYY hh-mm-ss a").format(new java.util.Date());
+    recordFilename = "EMG " + dateTimeString + ".csv";
+    
+    // Initialize writer when you start recording
+    writer = createWriter(recordFilename);
+    writer.println("EMG");
+  } else {
+    cp5.getController("Record").setLabel("Record");
+    updateStatus("Recording stopped");
+    // Stop recording logic
+    
+    if (writer != null) {
+      writer.flush(); // Writes the remaining data to the file
+      writer.close(); // Finishes the file
+      writer = null;
+    }
+  }
+}
+
+void handleRecording(float data) {
+  if (writer != null) {
+    writer.println(data);
   }
 }
 
